@@ -5,6 +5,11 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing draft release tag to attach installers to, such as v0.1.0
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -22,6 +27,8 @@ jobs:
           - os: macos-15
             platform: macos-universal
     runs-on: ${{ matrix.os }}
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
     steps:
       - name: Check out source
         uses: actions/checkout@v7
@@ -46,8 +53,8 @@ jobs:
       - name: Configure
         shell: bash
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          if [ "$VERSION" = "$GITHUB_REF_NAME" ]; then VERSION="0.1.0"; fi
+          VERSION="${RELEASE_TAG#v}"
+          if [ -z "$VERSION" ] || [ "$VERSION" = "$RELEASE_TAG" ]; then VERSION="0.1.0"; fi
           GENERATOR_ARGS=()
           if [ "$RUNNER_OS" = "Windows" ]; then
             GENERATOR_ARGS=(-G "Visual Studio 17 2022" -A x64)
@@ -80,33 +87,90 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          cmake --build build --config Release --target package
+          $ErrorActionPreference = 'Stop'
+          $pluginDirs = Get-ChildItem build -Directory -Recurse -Filter '*.vst3' | Where-Object { $_.Name -in @('XSTNSIONS Instrument.vst3', 'XSTNSIONS Effect.vst3') }
+          if ($pluginDirs.Count -ne 2) { throw "Expected both VST3 bundles, found $($pluginDirs.Count)." }
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Get-ChildItem build -Recurse -Filter *.exe | Where-Object { $_.Name -like 'XSTNSIONS-*.exe' } | Copy-Item -Destination dist
-          if (-not (Get-ChildItem dist -Filter *.exe)) { throw 'CPack did not produce a Windows installer.' }
-          Get-ChildItem dist -Filter *.exe | Select-Object -First 1 | Rename-Item -NewName "XSTNSIONS-$env:GITHUB_REF_NAME-windows-x64-setup.exe"
+          $pluginRoot = (Resolve-Path $pluginDirs[0].Parent.FullName).Path.Replace([string][char]92, '/')
+          $installer = "dist/XSTNSIONS-$env:RELEASE_TAG-windows-x64-setup.exe"
+          $nsi = @'
+          !define SOURCE_DIR "@SOURCE_DIR@"
+          Name "XSTNSIONS @VERSION@"
+          OutFile "@OUT_FILE@"
+          InstallDir "$COMMONFILES64/VST3"
+          RequestExecutionLevel admin
+          SetCompressor /SOLID lzma
+
+          Section "Install XSTNSIONS VST3 plugins"
+            SetOutPath "$COMMONFILES64/VST3/XSTNSIONS Instrument.vst3"
+            File /r "${SOURCE_DIR}/XSTNSIONS Instrument.vst3/*"
+            SetOutPath "$COMMONFILES64/VST3/XSTNSIONS Effect.vst3"
+            File /r "${SOURCE_DIR}/XSTNSIONS Effect.vst3/*"
+          SectionEnd
+
+          Section "Uninstall"
+            RMDir /r "$COMMONFILES64/VST3/XSTNSIONS Instrument.vst3"
+            RMDir /r "$COMMONFILES64/VST3/XSTNSIONS Effect.vst3"
+          SectionEnd
+          '@
+          $nsi = $nsi.Replace('@SOURCE_DIR@', $pluginRoot).Replace('@OUT_FILE@', $installer).Replace('@VERSION@', $env:RELEASE_TAG)
+          Set-Content -Path build/installer.nsi -Value $nsi -Encoding ascii
+          & makensis /V2 build/installer.nsi
+          if ($LASTEXITCODE -ne 0) { throw "NSIS exited with code $LASTEXITCODE." }
+          if (-not (Test-Path $installer)) { throw 'NSIS did not produce the Windows installer.' }
 
       - name: Package macOS installer disk image
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          if [ "$VERSION" = "$GITHUB_REF_NAME" ]; then VERSION="0.1.0"; fi
-          mkdir -p package-root package-stage dist
-          cmake --install build --config Release --prefix "$PWD/package-root" --component Plugins
-          pkgbuild --root "$PWD/package-root" --identifier audio.xstnsions.plugins --version "$VERSION" --install-location / "$PWD/package-stage/XSTNSIONS-${GITHUB_REF_NAME}-macos-universal.pkg"
-          hdiutil create -volname "XSTNSIONS ${GITHUB_REF_NAME}" -srcfolder "$PWD/package-stage" -ov -format UDZO "$PWD/dist/XSTNSIONS-${GITHUB_REF_NAME}-macos-universal.dmg"
-          hdiutil verify "$PWD/dist/XSTNSIONS-${GITHUB_REF_NAME}-macos-universal.dmg"
+          set -euo pipefail
+          VERSION="${RELEASE_TAG#v}"
+          if [ -z "$VERSION" ] || [ "$VERSION" = "$RELEASE_TAG" ]; then VERSION="0.1.0"; fi
+          VST3_DIR="$PWD/package-root/Library/Audio/Plug-Ins/VST3"
+          AU_DIR="$PWD/package-root/Library/Audio/Plug-Ins/Components"
+          mkdir -p "$VST3_DIR" "$AU_DIR" package-stage dist
+          while IFS= read -r -d '' plugin; do
+            ditto "$plugin" "$VST3_DIR/$(basename "$plugin")"
+          done < <(find build -type d -name '*.vst3' -print0)
+          while IFS= read -r -d '' plugin; do
+            ditto "$plugin" "$AU_DIR/$(basename "$plugin")"
+          done < <(find build -type d -name '*.component' -print0)
+          test "$(find "$VST3_DIR" -mindepth 1 -maxdepth 1 -type d -name '*.vst3' | wc -l | tr -d ' ')" -eq 2
+          test "$(find "$AU_DIR" -mindepth 1 -maxdepth 1 -type d -name '*.component' | wc -l | tr -d ' ')" -eq 2
+          pkgbuild --root "$PWD/package-root" --identifier audio.xstnsions.plugins --version "$VERSION" --install-location / "$PWD/package-stage/XSTNSIONS-${RELEASE_TAG}-macos-universal.pkg"
+          hdiutil create -volname "XSTNSIONS ${RELEASE_TAG}" -srcfolder "$PWD/package-stage" -ov -format UDZO "$PWD/dist/XSTNSIONS-${RELEASE_TAG}-macos-universal.dmg"
+          hdiutil verify "$PWD/dist/XSTNSIONS-${RELEASE_TAG}-macos-universal.dmg"
 
       - name: Package Linux Debian installer
         if: runner.os == 'Linux'
+        shell: bash
         run: |
-          cmake --build build --config Release --target package
-          mkdir -p dist
-          find build -maxdepth 2 -name '*.deb' -exec cp {} dist/ \;
-          test -n "$(find dist -name '*.deb' -print -quit)"
-          mv dist/*.deb "dist/XSTNSIONS-${GITHUB_REF_NAME}-linux-x64.deb"
-          dpkg-deb --info dist/*.deb
+          set -euo pipefail
+          package_root="$PWD/package-root"
+          vst3_dir="$package_root/usr/lib/vst3"
+          mkdir -p "$vst3_dir" dist
+          while IFS= read -r -d '' plugin; do
+            cp -a "$plugin" "$vst3_dir/"
+          done < <(find build -type d -name '*.vst3' -print0)
+          test "$(find "$vst3_dir" -mindepth 1 -maxdepth 1 -type d -name '*.vst3' | wc -l)" -eq 2
+          mapfile -d '' plugin_binaries < <(find "$vst3_dir" -type f -name '*.so' -print0)
+          test "${#plugin_binaries[@]}" -eq 2
+          dependencies="$(dpkg-shlibdeps -O "${plugin_binaries[@]}" | sed -n 's/^shlibs:Depends=//p')"
+          test -n "$dependencies"
+          mkdir -p "$package_root/DEBIAN"
+          cat > "$package_root/DEBIAN/control" <<EOF
+          Package: xstnsions
+          Version: ${RELEASE_TAG#v}
+          Section: sound
+          Priority: optional
+          Architecture: amd64
+          Maintainer: XSTNSIONS Audio
+          Depends: $dependencies
+          Description: A modular instrument and effect audio plug-in
+           Includes XSTNSIONS Instrument and Effect VST3 plug-ins.
+          EOF
+          dpkg-deb --build --root-owner-group "$package_root" "dist/XSTNSIONS-${RELEASE_TAG}-linux-x64.deb"
+          dpkg-deb --info "dist/XSTNSIONS-${RELEASE_TAG}-linux-x64.deb"
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v7
@@ -117,7 +181,7 @@ jobs:
           compression-level: 0
 
   publish:
-    if: startsWith(github.ref, 'refs/tags/')
+    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
     needs: package
     runs-on: ubuntu-24.04
     permissions:
@@ -140,6 +204,8 @@ jobs:
       - name: Publish installers on the GitHub release
         uses: softprops/action-gh-release@v3
         with:
+          tag_name: ${{ inputs.release_tag || github.ref_name }}
+          draft: true
           files: |
             dist/*.exe
             dist/*.dmg
