@@ -1,4 +1,5 @@
 name: Build and publish installers
+
 on:
   push:
     tags:
@@ -14,8 +15,10 @@ on:
         required: false
         default: false
         type: boolean
+
 permissions:
   contents: read
+
 jobs:
   package:
     strategy:
@@ -38,23 +41,28 @@ jobs:
       - name: Skip non-Windows matrix entries for Windows-only runs
         if: ${{ inputs.windows_only && !matrix.windows_only }}
         run: exit 0
+
       - name: Check out source
         if: ${{ !inputs.windows_only || matrix.windows_only }}
         uses: actions/checkout@v7
         with:
           persist-credentials: false
+
       - name: Install Linux build and packaging dependencies
         if: ${{ (!inputs.windows_only || matrix.windows_only) && runner.os == 'Linux' }}
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake ninja-build pkg-config libasound2-dev libfreetype-dev libfontconfig1-dev libx11-dev libxcomposite-dev libxcursor-dev libxext-dev libxinerama-dev libxrandr-dev libxrender-dev libxi-dev libgl1-mesa-dev libjack-jackd2-dev dpkg-dev
+
       - name: Install Windows packaging tool
         if: ${{ (!inputs.windows_only || matrix.windows_only) && runner.os == 'Windows' }}
         shell: pwsh
         run: choco install nsis --yes --no-progress
+
       - name: Install macOS build tools
         if: ${{ (!inputs.windows_only || matrix.windows_only) && runner.os == 'macOS' }}
         run: brew install ninja
+
       - name: Configure
         if: ${{ !inputs.windows_only || matrix.windows_only }}
         shell: bash
@@ -73,6 +81,7 @@ jobs:
           fi
           cmake -S . -B build "${GENERATOR_ARGS[@]}" -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DXSTNSIONS_BUILD_PLUGINS=ON -DXSTNSIONS_PACKAGE_VERSION="$VERSION" "${PLATFORM_ARGS[@]}"
           echo "XSTNSIONS release version: $VERSION"
+
       - name: Build
         if: ${{ !inputs.windows_only || matrix.windows_only }}
         shell: bash
@@ -85,9 +94,11 @@ jobs:
             exit "$build_status"
           fi
           tail -n 40 build.log
+
       - name: Run engine tests
         if: ${{ !inputs.windows_only || matrix.windows_only }}
         run: ctest --test-dir build --build-config Release --output-on-failure
+
       - name: Package Windows installer
         if: ${{ (!inputs.windows_only || matrix.windows_only) && runner.os == 'Windows' }}
         shell: pwsh
@@ -123,22 +134,24 @@ jobs:
           InstallDirRegKey HKLM "Software\XSTNSIONS Audio\XSTNSIONS" "InstallLocation"
           RequestExecutionLevel admin
           SetCompressor /SOLID lzma
+
           Section "Install XSTNSIONS VST3 plugins"
             SetShellVarContext all
             SetRegView 64
             SetOutPath "$COMMONFILES64\VST3/XSTNSIONS Instrument.vst3"
-            File /r "${SOURCE_DIR}\XSTNSIONS Instrument.vst3\*.*"
+            File /r "${SOURCE_DIR}/XSTNSIONS Instrument.vst3/Contents/*.*"
             IfErrors abort_install
             SetOutPath "$COMMONFILES64\VST3/XSTNSIONS Effect.vst3"
-            File /r "${SOURCE_DIR}\XSTNSIONS Effect.vst3\*.*"
+            File /r "${SOURCE_DIR}/XSTNSIONS Effect.vst3/Contents/*.*"
             IfErrors abort_install
-            WriteUninstaller "$INSTDIR\Uninstall.exe"
-            WriteRegStr HKLM "Software\XSTNSIONS Audio\XSTNSIONS" "InstallLocation" "$INSTDIR"
+            WriteUninstaller "$INSTDIR\\Uninstall.exe"
+            WriteRegStr HKLM "Software\\XSTNSIONS Audio\\XSTNSIONS" "InstallLocation" "$INSTDIR"
             Goto install_done
           abort_install:
             Abort "The VST3 bundles could not be installed."
           install_done:
-          SectionEnd
+            SectionEnd
+
           Section "Uninstall"
             SetShellVarContext all
             SetRegView 64
@@ -154,6 +167,7 @@ jobs:
           if (-not (Test-Path $installer)) { throw 'NSIS did not produce the Windows installer.' }
           $file = [System.IO.File]::OpenRead($installer)
           try { if ($file.Length -lt 1MB) { throw 'Windows installer is unexpectedly small.' } } finally { $file.Dispose() }
+
       - name: Package macOS installer disk image
         if: ${{ (!inputs.windows_only || matrix.windows_only) && runner.os == 'macOS' }}
         shell: bash
@@ -165,6 +179,7 @@ jobs:
           test -n "$pkg"
           cp "$pkg" "dist/XSTNSIONS-${RELEASE_TAG}-macos-universal.dmg"
           hdiutil verify "dist/XSTNSIONS-${RELEASE_TAG}-macos-universal.dmg"
+
       - name: Package Linux Debian installer
         if: ${{ (!inputs.windows_only || matrix.windows_only) && runner.os == 'Linux' }}
         shell: bash
@@ -191,6 +206,7 @@ jobs:
           EOF
           dpkg-deb --build --root-owner-group "$package_root" "dist/XSTNSIONS-${RELEASE_TAG}-linux-x64.deb"
           dpkg-deb --info "dist/XSTNSIONS-${RELEASE_TAG}-linux-x64.deb"
+
       - name: Upload installer artifact
         if: ${{ !inputs.windows_only || matrix.windows_only }}
         uses: actions/upload-artifact@v7
@@ -199,6 +215,7 @@ jobs:
           path: dist/*
           if-no-files-found: error
           compression-level: 0
+
   publish:
     if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && (inputs.release_tag != '' || inputs.windows_only))
     needs: package
@@ -212,12 +229,14 @@ jobs:
           path: dist
           pattern: installer-*
           merge-multiple: true
+
       - name: Create checksums
         run: |
           set -eu
           test -n "$(find dist -maxdepth 1 -type f -print -quit)"
           cd dist
           sha256sum * > SHA256SUMS
+
       - name: Publish installers on the GitHub release
         uses: softprops/action-gh-release@v3
         with:
