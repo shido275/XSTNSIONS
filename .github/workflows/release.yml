@@ -48,11 +48,17 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           if [ "$VERSION" = "$GITHUB_REF_NAME" ]; then VERSION="0.1.0"; fi
+          GENERATOR_ARGS=()
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            GENERATOR_ARGS=(-G "Visual Studio 17 2022" -A x64)
+          else
+            GENERATOR_ARGS=(-G Ninja)
+          fi
           PLATFORM_ARGS=()
           if [ "$RUNNER_OS" = "macOS" ]; then
             PLATFORM_ARGS+=("-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64")
           fi
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DXSTNSIONS_BUILD_PLUGINS=ON -DXSTNSIONS_PACKAGE_VERSION="$VERSION" "${PLATFORM_ARGS[@]}"
+          cmake -S . -B build "${GENERATOR_ARGS[@]}" -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DXSTNSIONS_BUILD_PLUGINS=ON -DXSTNSIONS_PACKAGE_VERSION="$VERSION" "${PLATFORM_ARGS[@]}"
 
       - name: Build
         run: cmake --build build --config Release --parallel 2
@@ -87,7 +93,7 @@ jobs:
         run: |
           cmake --build build --config Release --target package
           mkdir -p dist
-          find build -maxdepth 2 -name '*.deb' -exec cp {} dist/ \;
+          find build -maxdepth 2 -name '*.deb' -exec cp {} dist/ \\\;
           test -n "$(find dist -name '*.deb' -print -quit)"
           mv dist/*.deb "dist/XSTNSIONS-${GITHUB_REF_NAME}-linux-x64.deb"
           dpkg-deb --info dist/*.deb
