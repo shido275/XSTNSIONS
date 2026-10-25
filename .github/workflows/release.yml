@@ -10,6 +10,11 @@ on:
         description: Existing draft release tag to attach installers to, such as v0.1.0
         required: false
         type: string
+      windows_only:
+        description: Build and publish only the Windows installer
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -22,11 +27,15 @@ jobs:
         include:
           - os: ubuntu-24.04
             platform: linux-x64
+            windows_only: false
           - os: windows-2022
             platform: windows-x64
+            windows_only: true
           - os: macos-15
             platform: macos-universal
+            windows_only: false
     runs-on: ${{ matrix.os }}
+    if: ${{ !inputs.windows_only || matrix.windows_only }}
     env:
       RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
     steps:
@@ -109,19 +118,33 @@ jobs:
           Name "XSTNSIONS @VERSION@"
           OutFile "@OUT_FILE@"
           InstallDir "$COMMONFILES64\VST3"
+          InstallDirRegKey HKLM "Software\XSTNSIONS Audio\XSTNSIONS" "InstallLocation"
           RequestExecutionLevel admin
           SetCompressor /SOLID lzma
 
           Section "Install XSTNSIONS VST3 plugins"
+            SetShellVarContext all
+            SetRegView 64
             SetOutPath "$COMMONFILES64\VST3/XSTNSIONS Instrument.vst3"
             File /r "${SOURCE_DIR}/XSTNSIONS Instrument.vst3/*"
+            IfErrors abort_install
             SetOutPath "$COMMONFILES64\VST3/XSTNSIONS Effect.vst3"
             File /r "${SOURCE_DIR}/XSTNSIONS Effect.vst3/*"
+            IfErrors abort_install
+            WriteUninstaller "$INSTDIR\Uninstall.exe"
+            WriteRegStr HKLM "Software\XSTNSIONS Audio\XSTNSIONS" "InstallLocation" "$INSTDIR"
+            Goto install_done
+          abort_install:
+            Abort "The VST3 bundles could not be installed."
+          install_done:
           SectionEnd
 
           Section "Uninstall"
+            SetShellVarContext all
+            SetRegView 64
             RMDir /r "$COMMONFILES64\VST3/XSTNSIONS Instrument.vst3"
             RMDir /r "$COMMONFILES64\VST3/XSTNSIONS Effect.vst3"
+            DeleteRegKey HKLM "Software\XSTNSIONS Audio\XSTNSIONS"
           SectionEnd
           '@
           $nsi = $nsi.Replace('@SOURCE_DIR@', $pluginRoot).Replace('@OUT_FILE@', $installer).Replace('@VERSION@', $env:RELEASE_TAG)
@@ -129,6 +152,8 @@ jobs:
           & makensis /V2 build/installer.nsi
           if ($LASTEXITCODE -ne 0) { throw "NSIS exited with code $LASTEXITCODE." }
           if (-not (Test-Path $installer)) { throw 'NSIS did not produce the Windows installer.' }
+          $file = [System.IO.File]::OpenRead($installer)
+          try { if ($file.Length -lt 1MB) { throw 'Windows installer is unexpectedly small.' } } finally { $file.Dispose() }
 
       - name: Package macOS installer disk image
         if: runner.os == 'macOS'
@@ -178,7 +203,7 @@ jobs:
           compression-level: 0
 
   publish:
-    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
+    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && (inputs.release_tag != '' || inputs.windows_only))
     needs: package
     runs-on: ubuntu-24.04
     permissions:
@@ -203,10 +228,10 @@ jobs:
         with:
           tag_name: ${{ inputs.release_tag || github.ref_name }}
           draft: true
+          fail_on_unmatched_files: false
           files: |
             dist/*.exe
             dist/*.dmg
             dist/*.deb
             dist/SHA256SUMS
           generate_release_notes: true
-          fail_on_unmatched_files: true
