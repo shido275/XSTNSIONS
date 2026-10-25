@@ -59,6 +59,7 @@ jobs:
             PLATFORM_ARGS+=("-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64")
           fi
           cmake -S . -B build "${GENERATOR_ARGS[@]}" -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DXSTNSIONS_BUILD_PLUGINS=ON -DXSTNSIONS_PACKAGE_VERSION="$VERSION" "${PLATFORM_ARGS[@]}"
+          echo "XSTNSIONS release version: $VERSION"
 
       - name: Build
         shell: bash
@@ -93,9 +94,9 @@ jobs:
           if [ "$VERSION" = "$GITHUB_REF_NAME" ]; then VERSION="0.1.0"; fi
           mkdir -p package-root package-stage dist
           cmake --install build --config Release --prefix "$PWD/package-root" --component Plugins
-          pkgbuild --root package-root --identifier audio.xstnsions.plugins --version "$VERSION" --install-location / "package-stage/XSTNSIONS-${GITHUB_REF_NAME}-macos-universal.pkg"
-          hdiutil create -volname "XSTNSIONS ${GITHUB_REF_NAME}" -srcfolder package-stage -ov -format UDZO "dist/XSTNSIONS-${GITHUB_REF_NAME}-macos-universal.dmg"
-          hdiutil verify "dist/XSTNSIONS-${GITHUB_REF_NAME}-macos-universal.dmg"
+          pkgbuild --root "$PWD/package-root" --identifier audio.xstnsions.plugins --version "$VERSION" --install-location / "$PWD/package-stage/XSTNSIONS-${GITHUB_REF_NAME}-macos-universal.pkg"
+          hdiutil create -volname "XSTNSIONS ${GITHUB_REF_NAME}" -srcfolder "$PWD/package-stage" -ov -format UDZO "$PWD/dist/XSTNSIONS-${GITHUB_REF_NAME}-macos-universal.dmg"
+          hdiutil verify "$PWD/dist/XSTNSIONS-${GITHUB_REF_NAME}-macos-universal.dmg"
 
       - name: Package Linux Debian installer
         if: runner.os == 'Linux'
