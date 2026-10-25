@@ -1,0 +1,17 @@
+# CMake and plugin build output
+/build/
+/cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# Local dependency/build tooling
+/.build-cache/
+/.venv-build/
+
+# IDE/editor files
+.vscode/
+.idea/
+*.user
+*.swp
