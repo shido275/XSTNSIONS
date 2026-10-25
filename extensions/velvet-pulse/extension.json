@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "velvet-pulse",
+  "name": "Velvet Pulse",
+  "version": "1.0.0",
+  "kind": "preset",
+  "author": "XSTNSIONS Audio",
+  "description": "A bright, rounded pulse tone with restrained delay and smooth chorus.",
+  "preset": {
+    "waveform": "pulse",
+    "volume": 0.64,
+    "cutoff": 0.84,
+    "resonance": 0.18,
+    "delay": 0.17,
+    "chorus": 0.21
+  }
+}
