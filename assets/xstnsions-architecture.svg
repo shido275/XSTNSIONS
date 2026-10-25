@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1020" height="414" viewBox="0 0 1020 414" role="img" aria-labelledby="title description">
+  <title id="title">XSTNSIONS native audio plugin architecture</title>
+  <desc id="description">One shared DSP engine with an instrument, a stereo effects chain and safe local extension library, exported for desktop standalone, VST3 and macOS Audio Units.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#161521"/><stop offset="1" stop-color="#101118"/></linearGradient>
+    <linearGradient id="accent" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#d5a4ff"/><stop offset="1" stop-color="#9068ff"/></linearGradient>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><path d="M0 0 9 4 0 8Z" fill="#b794ff"/></marker>
+  </defs>
+  <rect width="1020" height="414" rx="28" fill="url(#bg)"/>
+  <text x="44" y="54" fill="#fff" font-family="Arial, sans-serif" font-size="24" font-weight="700" letter-spacing="1">XSTNSIONS</text>
+  <text x="46" y="78" fill="#b995ff" font-family="Arial, sans-serif" font-size="10" font-weight="700" letter-spacing="2">ONE SOUND ENGINE · A HOME IN EVERY STUDIO</text>
+  <rect x="38" y="107" width="944" height="184" rx="20" fill="#191a23" stroke="#34313f"/>
+  <rect x="67" y="139" width="236" height="119" rx="15" fill="#22202e" stroke="#444052"/>
+  <text x="88" y="165" fill="#c9a7ff" font-family="Arial, sans-serif" font-size="9" font-weight="700" letter-spacing="2">GENERATE</text>
+  <text x="88" y="195" fill="#fff" font-family="Arial, sans-serif" font-size="20" font-weight="700">Polyphonic synth</text>
+  <text x="88" y="222" fill="#afb0c0" font-family="Arial, sans-serif" font-size="11">Sine · Saw · Pulse · MIDI</text>
+  <path d="M103 241 Q116 225 129 241 T155 241 T181 241 T207 241 T233 241 T259 241" fill="none" stroke="#b690ff" stroke-width="2"/>
+  <path d="M311 198 H363" fill="none" stroke="#b794ff" stroke-width="2" marker-end="url(#arrow)"/>
+  <rect x="380" y="139" width="266" height="119" rx="15" fill="#22202e" stroke="#7658aa"/>
+  <text x="401" y="165" fill="#c9a7ff" font-family="Arial, sans-serif" font-size="9" font-weight="700" letter-spacing="2">SHAPE</text>
+  <text x="401" y="195" fill="#fff" font-family="Arial, sans-serif" font-size="20" font-weight="700">Stereo effect chain</text>
+  <text x="401" y="222" fill="#afb0c0" font-family="Arial, sans-serif" font-size="11">Tone · Resonance · Echo · Shimmer</text>
+  <path d="M399 241 H449 l9-12 14 23 17-29 13 18h119" fill="none" stroke="url(#accent)" stroke-width="2"/>
+  <path d="M652 198 H704" fill="none" stroke="#b794ff" stroke-width="2" marker-end="url(#arrow)"/>
+  <rect x="720" y="139" width="231" height="119" rx="15" fill="#22202e" stroke="#444052"/>
+  <text x="741" y="165" fill="#c9a7ff" font-family="Arial, sans-serif" font-size="9" font-weight="700" letter-spacing="2">EXTEND</text>
+  <text x="741" y="195" fill="#fff" font-family="Arial, sans-serif" font-size="20" font-weight="700">Local sound library</text>
+  <text x="741" y="222" fill="#afb0c0" font-family="Arial, sans-serif" font-size="11">Presets · Sample packs · Safe import</text>
+  <circle cx="746" cy="242" r="4" fill="#91e7c1"/><text x="756" y="246" fill="#91e7c1" font-family="Arial, sans-serif" font-size="8" font-weight="700" letter-spacing="1">BUILT NOT BORROWED</text>
+  <path d="M514 294v24m-285 0h570m-570 0v12m285-12v12m285-12v12" fill="none" stroke="#5e4c7d" stroke-width="1.5"/>
+  <g font-family="Arial, sans-serif" text-anchor="middle">
+    <rect x="88" y="345" width="250" height="42" rx="12" fill="#201d2b" stroke="#3e374c"/><text x="213" y="371" fill="#f1edfa" font-size="12" font-weight="700">STANDALONE · LINUX / MAC / PC</text>
+    <rect x="385" y="345" width="250" height="42" rx="12" fill="#201d2b" stroke="#3e374c"/><text x="510" y="371" fill="#f1edfa" font-size="12" font-weight="700">VST3 · IN EVERY MAJOR DAW</text>
+    <rect x="682" y="345" width="250" height="42" rx="12" fill="#201d2b" stroke="#3e374c"/><text x="807" y="371" fill="#f1edfa" font-size="12" font-weight="700">AUDIO UNIT · macOS</text>
+  </g>
+</svg>
