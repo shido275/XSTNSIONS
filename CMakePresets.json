@@ -1,0 +1,51 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 22,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "tests",
+      "displayName": "Test DSP and local extension packages",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/tests",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_TESTING": "ON",
+        "XSTNSIONS_BUILD_PLUGINS": "OFF"
+      }
+    },
+    {
+      "name": "desktop",
+      "displayName": "Build standalone, VST3, and platform AU plug-ins",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/desktop",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_TESTING": "ON",
+        "XSTNSIONS_BUILD_PLUGINS": "ON"
+      }
+    },
+    {
+      "name": "ci-linux",
+      "displayName": "Linux x86_64 standalone and VST3 instrument and effect",
+      "inherits": "desktop",
+      "binaryDir": "${sourceDir}/build/ci-linux",
+      "cacheVariables": {
+        "CMAKE_SYSTEM_PROCESSOR": "x86_64",
+        "CMAKE_CXX_COMPILER": "g++"
+      }
+    }
+  ],
+  "buildPresets": [
+    {"name": "test", "configurePreset": "tests", "targets": ["xstnsions_engine_tests"]},
+    {"name": "desktop", "configurePreset": "desktop"},
+    {"name": "ci-linux", "configurePreset": "ci-linux"}
+  ],
+  "testPresets": [
+    {"name": "test", "configurePreset": "tests", "output": {"outputOnFailure": true}},
+    {"name": "desktop", "configurePreset": "desktop", "output": {"outputOnFailure": true}}
+  ]
+}
