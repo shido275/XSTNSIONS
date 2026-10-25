@@ -61,7 +61,16 @@ jobs:
           cmake -S . -B build "${GENERATOR_ARGS[@]}" -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DXSTNSIONS_BUILD_PLUGINS=ON -DXSTNSIONS_PACKAGE_VERSION="$VERSION" "${PLATFORM_ARGS[@]}"
 
       - name: Build
-        run: cmake --build build --config Release --parallel 2
+        shell: bash
+        run: |
+          set +e
+          cmake --build build --config Release --parallel 2 > build.log 2>&1
+          build_status=$?
+          if [ "$build_status" -ne 0 ]; then
+            grep -E -A 3 -B 2 'error:|fatal error:|undefined reference|unresolved external' build.log | tail -n 80 || tail -n 80 build.log
+            exit "$build_status"
+          fi
+          tail -n 40 build.log
 
       - name: Run engine tests
         run: ctest --test-dir build --build-config Release --output-on-failure
