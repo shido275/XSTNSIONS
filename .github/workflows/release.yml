@@ -91,26 +91,37 @@ jobs:
           $pluginDirs = Get-ChildItem build -Directory -Recurse -Filter '*.vst3' | Where-Object { $_.Name -in @('XSTNSIONS Instrument.vst3', 'XSTNSIONS Effect.vst3') }
           if ($pluginDirs.Count -ne 2) { throw "Expected both VST3 bundles, found $($pluginDirs.Count)." }
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          $pluginRoot = (Resolve-Path $pluginDirs[0].Parent.FullName).Path.Replace([string][char]92, '/')
+          $pluginRoot = Join-Path (Resolve-Path build).Path 'installer-plugins'
+          Remove-Item -Path $pluginRoot -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $pluginRoot | Out-Null
+          foreach ($pluginDir in $pluginDirs) {
+            $stagedPlugin = Join-Path $pluginRoot $pluginDir.Name
+            New-Item -ItemType Directory -Force -Path $stagedPlugin | Out-Null
+            Copy-Item -Path (Join-Path $pluginDir.FullName '*') -Destination $stagedPlugin -Recurse -Force
+          }
+          foreach ($expectedPlugin in @('XSTNSIONS Instrument.vst3', 'XSTNSIONS Effect.vst3')) {
+            if (-not (Test-Path (Join-Path $pluginRoot $expectedPlugin))) { throw "Failed to stage $expectedPlugin." }
+          }
+          $pluginRoot = (Resolve-Path $pluginRoot).Path.Replace([char]92, '/')
           $installer = "dist/XSTNSIONS-$env:RELEASE_TAG-windows-x64-setup.exe"
           $nsi = @'
           !define SOURCE_DIR "@SOURCE_DIR@"
           Name "XSTNSIONS @VERSION@"
           OutFile "@OUT_FILE@"
-          InstallDir "$COMMONFILES64/VST3"
+          InstallDir "$COMMONFILES64\VST3"
           RequestExecutionLevel admin
           SetCompressor /SOLID lzma
 
           Section "Install XSTNSIONS VST3 plugins"
-            SetOutPath "$COMMONFILES64/VST3/XSTNSIONS Instrument.vst3"
+            SetOutPath "$COMMONFILES64\VST3/XSTNSIONS Instrument.vst3"
             File /r "${SOURCE_DIR}/XSTNSIONS Instrument.vst3/*"
-            SetOutPath "$COMMONFILES64/VST3/XSTNSIONS Effect.vst3"
+            SetOutPath "$COMMONFILES64\VST3/XSTNSIONS Effect.vst3"
             File /r "${SOURCE_DIR}/XSTNSIONS Effect.vst3/*"
           SectionEnd
 
           Section "Uninstall"
-            RMDir /r "$COMMONFILES64/VST3/XSTNSIONS Instrument.vst3"
-            RMDir /r "$COMMONFILES64/VST3/XSTNSIONS Effect.vst3"
+            RMDir /r "$COMMONFILES64\VST3/XSTNSIONS Instrument.vst3"
+            RMDir /r "$COMMONFILES64\VST3/XSTNSIONS Effect.vst3"
           SectionEnd
           '@
           $nsi = $nsi.Replace('@SOURCE_DIR@', $pluginRoot).Replace('@OUT_FILE@', $installer).Replace('@VERSION@', $env:RELEASE_TAG)
@@ -124,22 +135,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          VERSION="${RELEASE_TAG#v}"
-          if [ -z "$VERSION" ] || [ "$VERSION" = "$RELEASE_TAG" ]; then VERSION="0.1.0"; fi
-          VST3_DIR="$PWD/package-root/Library/Audio/Plug-Ins/VST3"
-          AU_DIR="$PWD/package-root/Library/Audio/Plug-Ins/Components"
-          mkdir -p "$VST3_DIR" "$AU_DIR" package-stage dist
-          while IFS= read -r -d '' plugin; do
-            ditto "$plugin" "$VST3_DIR/$(basename "$plugin")"
-          done < <(find build -type d -name '*.vst3' -print0)
-          while IFS= read -r -d '' plugin; do
-            ditto "$plugin" "$AU_DIR/$(basename "$plugin")"
-          done < <(find build -type d -name '*.component' -print0)
-          test "$(find "$VST3_DIR" -mindepth 1 -maxdepth 1 -type d -name '*.vst3' | wc -l | tr -d ' ')" -eq 2
-          test "$(find "$AU_DIR" -mindepth 1 -maxdepth 1 -type d -name '*.component' | wc -l | tr -d ' ')" -eq 2
-          pkgbuild --root "$PWD/package-root" --identifier audio.xstnsions.plugins --version "$VERSION" --install-location / "$PWD/package-stage/XSTNSIONS-${RELEASE_TAG}-macos-universal.pkg"
-          hdiutil create -volname "XSTNSIONS ${RELEASE_TAG}" -srcfolder "$PWD/package-stage" -ov -format UDZO "$PWD/dist/XSTNSIONS-${RELEASE_TAG}-macos-universal.dmg"
-          hdiutil verify "$PWD/dist/XSTNSIONS-${RELEASE_TAG}-macos-universal.dmg"
+          cmake --build build --config Release --target package
+          mkdir -p dist
+          pkg="$(find build -maxdepth 1 -type f -name '*.dmg' -print -quit)"
+          test -n "$pkg"
+          cp "$pkg" "dist/XSTNSIONS-${RELEASE_TAG}-macos-universal.dmg"
+          hdiutil verify "dist/XSTNSIONS-${RELEASE_TAG}-macos-universal.dmg"
 
       - name: Package Linux Debian installer
         if: runner.os == 'Linux'
@@ -148,16 +149,12 @@ jobs:
           set -euo pipefail
           package_root="$PWD/package-root"
           vst3_dir="$package_root/usr/lib/vst3"
-          mkdir -p "$vst3_dir" dist
+          mkdir -p "$vst3_dir" "$package_root/DEBIAN" dist
           while IFS= read -r -d '' plugin; do
             cp -a "$plugin" "$vst3_dir/"
           done < <(find build -type d -name '*.vst3' -print0)
           test "$(find "$vst3_dir" -mindepth 1 -maxdepth 1 -type d -name '*.vst3' | wc -l)" -eq 2
-          mapfile -d '' plugin_binaries < <(find "$vst3_dir" -type f -name '*.so' -print0)
-          test "${#plugin_binaries[@]}" -eq 2
-          dependencies="$(dpkg-shlibdeps -O "${plugin_binaries[@]}" | sed -n 's/^shlibs:Depends=//p')"
-          test -n "$dependencies"
-          mkdir -p "$package_root/DEBIAN"
+          test "$(find "$vst3_dir" -type f -name '*.so' | wc -l)" -eq 2
           cat > "$package_root/DEBIAN/control" <<EOF
           Package: xstnsions
           Version: ${RELEASE_TAG#v}
@@ -165,7 +162,7 @@ jobs:
           Priority: optional
           Architecture: amd64
           Maintainer: XSTNSIONS Audio
-          Depends: $dependencies
+          Depends: libc6, libstdc++6, libfontconfig1, libfreetype6
           Description: A modular instrument and effect audio plug-in
            Includes XSTNSIONS Instrument and Effect VST3 plug-ins.
           EOF

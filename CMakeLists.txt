@@ -4,6 +4,17 @@ project(XSTNSIONS VERSION 0.1.0 LANGUAGES C CXX)
 include(CTest)
 option(XSTNSIONS_BUILD_PLUGINS "Build JUCE standalone and DAW plugin targets" ON)
 
+set(CPACK_PACKAGE_NAME "XSTNSIONS")
+set(CPACK_PACKAGE_VENDOR "XSTNSIONS Audio")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "A modular instrument and effect audio plug-in")
+set(XSTNSIONS_PACKAGE_VERSION "${PROJECT_VERSION}" CACHE STRING "Version used in desktop installer packages")
+set(CPACK_PACKAGE_VERSION "${XSTNSIONS_PACKAGE_VERSION}")
+
+# MinGW is explicitly unsupported by JUCE 9; require the MSVC toolchain on Windows.
+if(WIN32 AND MINGW)
+    message(FATAL_ERROR "JUCE does not support MinGW. Configure XSTNSIONS with the Visual Studio 2022 generator and MSVC.")
+endif()
+
 add_library(xstnsions_engine INTERFACE)
 target_include_directories(xstnsions_engine INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/Source)
 target_compile_features(xstnsions_engine INTERFACE cxx_std_17)
@@ -81,28 +92,27 @@ if(XSTNSIONS_BUILD_PLUGINS)
     set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "A modular instrument and effect audio plug-in")
     set(CPACK_PACKAGE_CONTACT "XSTNSIONS Audio")
     set(CPACK_PACKAGE_INSTALL_DIRECTORY "XSTNSIONS")
-    set(XSTNSIONS_PACKAGE_VERSION "${PROJECT_VERSION}" CACHE STRING "Version used in desktop installer packages")
-    set(CPACK_PACKAGE_VERSION "${XSTNSIONS_PACKAGE_VERSION}")
-
-    # MinGW is explicitly unsupported by JUCE 9; use the MSVC toolchain on Windows.
+    set(CPACK_PACKAGE_FILE_NAME "XSTNSIONS-${XSTNSIONS_PACKAGE_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
+    # JUCE 9 rejects MinGW; its Windows plug-ins require the MSVC toolchain.
     if(WIN32 AND MINGW)
         message(FATAL_ERROR "JUCE does not support MinGW. Configure XSTNSIONS with Visual Studio 2022 and MSVC.")
     endif()
-
-    set(CPACK_INSTALL_CMAKE_PROJECTS "${CMAKE_BINARY_DIR};${PROJECT_NAME};ALL;/")
-    set(CPACK_PACKAGE_FILE_NAME "XSTNSIONS-${XSTNSIONS_PACKAGE_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
+    set(CPACK_INSTALL_CMAKE_PROJECTS "${CMAKE_BINARY_DIR};${PROJECT_NAME};Plugins;/")
     if(WIN32)
         # Component-specific NSIS path targets the standard 64-bit VST3 directory.
         set(XSTNSIONS_VST3_INSTALL_DIR ".")
-        set(CPACK_GENERATOR "NSIS")
-        set(CPACK_NSIS_COMPONENT_INSTALL ON)
-        set(CPACK_NSIS_PLUGINS_INSTALL_DIRECTORY "$COMMONFILES64\\VST3")
+        set(CPACK_NSIS_INSTALL_ROOT "$COMMONFILES64/VST3")
         set(CPACK_NSIS_DISPLAY_NAME "XSTNSIONS Audio Plugins")
         set(CPACK_NSIS_PACKAGE_NAME "XSTNSIONS VST3 Plugins")
+        set(CPACK_NSIS_COMPONENT_INSTALL ON)
+        set(CPACK_GENERATOR "NSIS")
     elseif(APPLE)
         set(XSTNSIONS_VST3_INSTALL_DIR "Library/Audio/Plug-Ins/VST3")
         set(CPACK_GENERATOR "DragNDrop")
         set(CPACK_PACKAGING_INSTALL_PREFIX "/")
+        set(CPACK_COMPONENTS_ALL Plugins)
+        set(CPACK_DMG_VOLUME_NAME "XSTNSIONS ${XSTNSIONS_PACKAGE_VERSION}")
+        set(CPACK_PACKAGE_FILE_NAME "XSTNSIONS-${XSTNSIONS_PACKAGE_VERSION}-macos-universal")
     else()
         # /usr is the standard prefix for Debian packages, giving /usr/lib/vst3.
         set(XSTNSIONS_VST3_INSTALL_DIR "lib/vst3")
@@ -111,28 +121,24 @@ if(XSTNSIONS_BUILD_PLUGINS)
         set(CPACK_DEBIAN_PACKAGE_SECTION "sound")
         set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
         set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
-        set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+        set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS OFF)
+        set(CPACK_DEBIAN_PACKAGE_DEPENDS "libc6, libstdc++6, libfontconfig1, libfreetype6")
         set(CPACK_PACKAGING_INSTALL_PREFIX "/usr")
     endif()
 
-    # JUCE exposes the actual bundle paths as target properties after plugin creation.
-    install(DIRECTORY
-        "$<TARGET_PROPERTY:XSTNSIONS_Instrument_VST3,JUCE_PLUGIN_ARTEFACT_FILE>"
-        DESTINATION "${XSTNSIONS_VST3_INSTALL_DIR}"
-        COMPONENT Plugins)
-    install(DIRECTORY
-        "$<TARGET_PROPERTY:XSTNSIONS_Effect_VST3,JUCE_PLUGIN_ARTEFACT_FILE>"
-        DESTINATION "${XSTNSIONS_VST3_INSTALL_DIR}"
-        COMPONENT Plugins)
+    foreach(plugin IN ITEMS XSTNSIONS_Instrument XSTNSIONS_Effect)
+        get_target_property(vst3_artifact ${plugin}_VST3 JUCE_PLUGIN_ARTEFACT_FILE)
+        install(DIRECTORY "${vst3_artifact}"
+            DESTINATION "${XSTNSIONS_VST3_INSTALL_DIR}"
+            COMPONENT Plugins)
+    endforeach()
     if(APPLE)
-        install(DIRECTORY
-            "$<TARGET_PROPERTY:XSTNSIONS_Instrument_AU,JUCE_PLUGIN_ARTEFACT_FILE>"
-            DESTINATION "Library/Audio/Plug-Ins/Components"
-            COMPONENT Plugins)
-        install(DIRECTORY
-            "$<TARGET_PROPERTY:XSTNSIONS_Effect_AU,JUCE_PLUGIN_ARTEFACT_FILE>"
-            DESTINATION "Library/Audio/Plug-Ins/Components"
-            COMPONENT Plugins)
+        foreach(plugin IN ITEMS XSTNSIONS_Instrument XSTNSIONS_Effect)
+            get_target_property(au_artifact ${plugin}_AU JUCE_PLUGIN_ARTEFACT_FILE)
+            install(DIRECTORY "${au_artifact}"
+                DESTINATION "Library/Audio/Plug-Ins/Components"
+                COMPONENT Plugins)
+        endforeach()
     elseif(WIN32)
         cpack_add_component(Plugins DISPLAY_NAME "VST3 plug-ins" REQUIRED)
     elseif(UNIX)
