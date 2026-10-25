@@ -73,4 +73,62 @@ if(XSTNSIONS_BUILD_PLUGINS)
 
     add_xstnsions_plugin(XSTNSIONS_Instrument "XSTNSIONS Instrument" Xtsi TRUE)
     add_xstnsions_plugin(XSTNSIONS_Effect "XSTNSIONS Effect" Xtef FALSE)
+
+    include(GNUInstallDirs)
+    include(CPackComponent)
+    set(CPACK_PACKAGE_NAME "XSTNSIONS")
+    set(CPACK_PACKAGE_VENDOR "XSTNSIONS Audio")
+    set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "A modular instrument and effect audio plug-in")
+    set(CPACK_PACKAGE_CONTACT "XSTNSIONS Audio")
+    set(CPACK_PACKAGE_INSTALL_DIRECTORY "XSTNSIONS")
+    set(XSTNSIONS_PACKAGE_VERSION "${PROJECT_VERSION}" CACHE STRING "Version used in installer package names")
+    set(CPACK_PACKAGE_VERSION "${XSTNSIONS_PACKAGE_VERSION}")
+    set(CPACK_INSTALL_CMAKE_PROJECTS "${CMAKE_BINARY_DIR};${PROJECT_NAME};ALL;/")
+    set(CPACK_PACKAGE_FILE_NAME "XSTNSIONS-${XSTNSIONS_PACKAGE_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
+
+    if(WIN32)
+        # CPack's component install path directs VST3 bundles into the standard 64-bit location.
+        set(XSTNSIONS_VST3_INSTALL_DIR ".")
+        set(CPACK_GENERATOR "NSIS")
+        set(CPACK_NSIS_COMPONENT_INSTALL ON)
+        set(CPACK_NSIS_PLUGINS_INSTALL_DIRECTORY "$COMMONFILES64\\VST3")
+        set(CPACK_NSIS_DISPLAY_NAME "XSTNSIONS Audio Plugins")
+        set(CPACK_NSIS_PACKAGE_NAME "XSTNSIONS VST3 Plugins")
+    elseif(APPLE)
+        set(XSTNSIONS_VST3_INSTALL_DIR "Library/Audio/Plug-Ins/VST3")
+        set(CPACK_GENERATOR "DragNDrop")
+        set(CPACK_PACKAGING_INSTALL_PREFIX "/")
+    else()
+        set(XSTNSIONS_VST3_INSTALL_DIR "lib/vst3")
+        set(CPACK_GENERATOR "DEB")
+        set(CPACK_DEBIAN_PACKAGE_MAINTAINER "XSTNSIONS Audio")
+        set(CPACK_DEBIAN_PACKAGE_SECTION "sound")
+        set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
+        set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
+        set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+        set(CPACK_PACKAGING_INSTALL_PREFIX "/usr")
+    endif()
+
+    install(DIRECTORY
+        "$<TARGET_PROPERTY:XSTNSIONS_Instrument_VST3,JUCE_PLUGIN_ARTEFACT_FILE>"
+        DESTINATION "${XSTNSIONS_VST3_INSTALL_DIR}"
+        COMPONENT Plugins)
+    install(DIRECTORY
+        "$<TARGET_PROPERTY:XSTNSIONS_Effect_VST3,JUCE_PLUGIN_ARTEFACT_FILE>"
+        DESTINATION "${XSTNSIONS_VST3_INSTALL_DIR}"
+        COMPONENT Plugins)
+    if(APPLE)
+        install(DIRECTORY
+            "$<TARGET_PROPERTY:XSTNSIONS_Instrument_AU,JUCE_PLUGIN_ARTEFACT_FILE>"
+            DESTINATION "Library/Audio/Plug-Ins/Components"
+            COMPONENT Plugins)
+        install(DIRECTORY
+            "$<TARGET_PROPERTY:XSTNSIONS_Effect_AU,JUCE_PLUGIN_ARTEFACT_FILE>"
+            DESTINATION "Library/Audio/Plug-Ins/Components"
+            COMPONENT Plugins)
+    else()
+        cpack_add_component(Plugins DISPLAY_NAME "VST3 plug-ins" REQUIRED)
+    endif()
+
+    include(CPack)
 endif()
