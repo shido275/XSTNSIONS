@@ -1,5 +1,6 @@
 # CMake and plugin build output
 /build/
+/dist/
 /cmake-build-*/
 CMakeFiles/
 CMakeCache.txt
