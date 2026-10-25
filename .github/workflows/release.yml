@@ -113,10 +113,16 @@ jobs:
           foreach ($pluginDir in $pluginDirs) {
             $stagedPlugin = Join-Path $pluginRoot $pluginDir.Name
             New-Item -ItemType Directory -Force -Path $stagedPlugin | Out-Null
-            Copy-Item -Path (Join-Path $pluginDir.FullName '*') -Destination $stagedPlugin -Recurse -Force
+            Get-ChildItem -LiteralPath $pluginDir.FullName -Force | ForEach-Object {
+              Copy-Item -LiteralPath $_.FullName -Destination $stagedPlugin -Recurse -Force
+            }
+            $stagedFiles = @(Get-ChildItem -LiteralPath $stagedPlugin -File -Recurse -Force)
+            if ($stagedFiles.Count -eq 0) { throw "No files were copied from $($pluginDir.FullName)." }
           }
           foreach ($expectedPlugin in @('XSTNSIONS Instrument.vst3', 'XSTNSIONS Effect.vst3')) {
-            if (-not (Test-Path (Join-Path $pluginRoot $expectedPlugin))) { throw "Failed to stage $expectedPlugin." }
+            $stagedPlugin = Join-Path $pluginRoot $expectedPlugin
+            if (-not (Test-Path $stagedPlugin)) { throw "Failed to stage $expectedPlugin." }
+            if (@(Get-ChildItem -LiteralPath $stagedPlugin -File -Recurse -Force).Count -eq 0) { throw "$expectedPlugin is empty after staging." }
           }
           $pluginRoot = (Resolve-Path $pluginRoot).Path.Replace([char]92, '/')
           $installer = "dist/XSTNSIONS-$env:RELEASE_TAG-windows-x64-setup.exe"
@@ -138,8 +144,8 @@ jobs:
             SetOutPath "$COMMONFILES64\VST3/XSTNSIONS Effect.vst3"
             File /r "${SOURCE_DIR}/XSTNSIONS Effect.vst3/*"
             IfErrors abort_install
-            WriteUninstaller "$INSTDIR\Uninstall.exe"
-            WriteRegStr HKLM "Software\XSTNSIONS Audio\XSTNSIONS" "InstallLocation" "$INSTDIR"
+            WriteUninstaller "$INSTDIR\\Uninstall.exe"
+            WriteRegStr HKLM "Software\\XSTNSIONS Audio\\XSTNSIONS" "InstallLocation" "$INSTDIR"
             Goto install_done
           abort_install:
             Abort "The VST3 bundles could not be installed."
