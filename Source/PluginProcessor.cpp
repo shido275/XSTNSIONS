@@ -18,15 +18,19 @@ const juce::StringArray kParameterIds{
 
 std::vector<xstnsions::ExtensionManifest> readBundledPresets() {
     const std::array<std::pair<const char*, const char*>, 2> packages{{
-        {"aurora-keys", BinaryData::extensions_aurora_002dkeys_extension_json},
-        {"velvet-pulse", BinaryData::extensions_velvet_002dpulse_extension_json}}};
+        {"aurora-keys", "extension_json"},
+        {"velvet-pulse", "extension_json2"}}};
     std::vector<xstnsions::ExtensionManifest> presets;
-    for (const auto& package : packages) {
-        const auto json = juce::String::fromUTF8(
-            package.second, static_cast<int>(std::strlen(package.second)));
+    for (std::size_t index = 0; index < packages.size(); ++index) {
+        const auto& package = packages[index];
+        int dataSize = 0;
+        const auto* data = BinaryData::getNamedResource(package.second, dataSize);
+        if (data == nullptr || dataSize <= 0)
+            throw std::runtime_error("A bundled XSTNSIONS preset resource is missing");
+        const auto json = juce::String::fromUTF8(data, dataSize);
         auto temporary = std::filesystem::temp_directory_path() /
                          ("xstnsions-extension-" + std::string(package.first) + "-" +
-                          std::to_string(reinterpret_cast<std::uintptr_t>(package.second)) + ".json");
+                          std::to_string(index) + ".json");
         {
             std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
             output << json.toStdString();

@@ -125,7 +125,7 @@ void XSTNSIONSEditor::refreshExtensions() {
             status += "    /    ";
             for (std::size_t i = 0; i < packages.size() && i < 4; ++i) {
                 if (i != 0) status += "   ·   ";
-                status += packages[i].name;
+                status += juce::String(packages[i].name);
             }
             if (packages.size() > 4)
                 status += "   ·   +" + juce::String(static_cast<int>(packages.size() - 4)) + " MORE";
