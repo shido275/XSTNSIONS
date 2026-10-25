@@ -125,9 +125,22 @@ jobs:
             if (@(Get-ChildItem -LiteralPath $stagedPlugin -File -Recurse -Force).Count -eq 0) { throw "$expectedPlugin is empty after staging." }
           }
           $pluginRoot = (Resolve-Path $pluginRoot).Path.Replace([char]92, '/')
+          $installCommands = [System.Collections.Generic.List[string]]::new()
+          foreach ($expectedPlugin in @('XSTNSIONS Instrument.vst3', 'XSTNSIONS Effect.vst3')) {
+            $stagedPlugin = Join-Path $pluginRoot $expectedPlugin
+            $files = @(Get-ChildItem -LiteralPath $stagedPlugin -File -Recurse -Force | Sort-Object FullName)
+            foreach ($pluginFile in $files) {
+              $relativeDirectory = [System.IO.Path]::GetRelativePath($stagedPlugin, $pluginFile.DirectoryName).Replace([char]92, '/')
+              $destination = '$COMMONFILES64\VST3/' + $expectedPlugin
+              if ($relativeDirectory -ne '.') { $destination = "$destination/$relativeDirectory" }
+              $source = $pluginFile.FullName.Replace([char]92, '/')
+              $installCommands.Add(('SetOutPath "{0}"' -f $destination))
+              $installCommands.Add(('File "{0}"' -f $source))
+            }
+          }
+          if ($installCommands.Count -eq 0) { throw 'No files were selected for the NSIS installer.' }
           $installer = "dist/XSTNSIONS-$env:RELEASE_TAG-windows-x64-setup.exe"
           $nsi = @'
-          !define SOURCE_DIR "@SOURCE_DIR@"
           Name "XSTNSIONS @VERSION@"
           OutFile "@OUT_FILE@"
           InstallDir "$COMMONFILES64\VST3"
@@ -138,19 +151,14 @@ jobs:
           Section "Install XSTNSIONS VST3 plugins"
             SetShellVarContext all
             SetRegView 64
-            SetOutPath "$COMMONFILES64\VST3/XSTNSIONS Instrument.vst3"
-            File /r "${SOURCE_DIR}/XSTNSIONS Instrument.vst3/Contents/*.*"
-            IfErrors abort_install
-            SetOutPath "$COMMONFILES64\VST3/XSTNSIONS Effect.vst3"
-            File /r "${SOURCE_DIR}/XSTNSIONS Effect.vst3/Contents/*.*"
-            IfErrors abort_install
+          @INSTALL_FILES@
             WriteUninstaller "$INSTDIR\\Uninstall.exe"
             WriteRegStr HKLM "Software\\XSTNSIONS Audio\\XSTNSIONS" "InstallLocation" "$INSTDIR"
             Goto install_done
           abort_install:
             Abort "The VST3 bundles could not be installed."
           install_done:
-            SectionEnd
+          SectionEnd
 
           Section "Uninstall"
             SetShellVarContext all
@@ -160,7 +168,7 @@ jobs:
             DeleteRegKey HKLM "Software\XSTNSIONS Audio\XSTNSIONS"
           SectionEnd
           '@
-          $nsi = $nsi.Replace('@SOURCE_DIR@', $pluginRoot).Replace('@OUT_FILE@', $installer).Replace('@VERSION@', $env:RELEASE_TAG)
+          $nsi = $nsi.Replace('@OUT_FILE@', $installer).Replace('@VERSION@', $env:RELEASE_TAG).Replace('@INSTALL_FILES@', ($installCommands -join "`n"))
           Set-Content -Path build/installer.nsi -Value $nsi -Encoding ascii
           & makensis /V2 build/installer.nsi
           if ($LASTEXITCODE -ne 0) { throw "NSIS exited with code $LASTEXITCODE." }
