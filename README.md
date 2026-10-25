@@ -40,7 +40,19 @@ Then build both plugins and standalone applications:
 cmake --build build --config Release -j2
 ```
 
-Install via the generated CMake install step if packaging/install rules are added; until then, copy the standalone apps and generated `.vst3` / `.component` bundles to the standard directories of your DAW/OS and rescan plugins. In a DAW, add the **instrument** to a MIDI/instrument track; insert the **effect** on an audio channel. Standalone instruments need a MIDI input selected, and standalone effects need a live audio input.
+Create a native installer with CPack (install NSIS 3 or newer on Windows):
+
+```sh
+cmake --build build --config Release --target package
+```
+
+This produces a Windows `.exe` setup installer, a macOS `.dmg`, or a Debian-family Linux `.deb`. The installers contain the VST3 plug-ins, plus Audio Units on macOS. Windows installs into the standard 64-bit Common Files VST3 directory; the Linux package installs to `/usr/lib/vst3` and may require administrator privileges. The macOS disk image contains a standard `.pkg` installer; release builds are universal for Apple Silicon and Intel. macOS signing and notarization are not configured yet, so the first downloads are unsigned and may require approval in macOS security settings.
+
+### Download installers
+
+Push a version tag such as `v0.1.0` to run the cross-platform GitHub Actions workflow. Once all platform builds and tests pass, it attaches the Windows `.exe`, macOS `.dmg`, Linux `.deb`, and `SHA256SUMS` to the corresponding GitHub Release. Build output and installer artifacts are excluded from Git commits.
+
+In a DAW, add the **instrument** to a MIDI/instrument track; insert the **effect** on an audio channel. Standalone instruments need a MIDI input selected, and standalone effects need a live audio input.
 
 > JUCE is fetched from its upstream Git repository under the JUCE license. Read the official JUCE license and JUCE's VST3/AU/AAX SDK terms before distributing generated plug-ins.
 
