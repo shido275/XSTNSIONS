@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "aurora-keys",
+  "name": "Aurora Keys",
+  "version": "1.0.0",
+  "kind": "preset",
+  "author": "XSTNSIONS Audio",
+  "description": "A soft sine-led patch with shimmering modulation and a spacious tape echo.",
+  "preset": {
+    "waveform": "sine",
+    "volume": 0.72,
+    "cutoff": 0.61,
+    "resonance": 0.11,
+    "delay": 0.24,
+    "chorus": 0.33
+  }
+}
