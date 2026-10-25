@@ -1,0 +1,133 @@
+name: Build and publish installers
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux-x64
+          - os: windows-2022
+            platform: windows-x64
+          - os: macos-15
+            platform: macos-universal
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install Linux build and packaging dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build pkg-config libasound2-dev libfreetype-dev libfontconfig1-dev libx11-dev libxcomposite-dev libxcursor-dev libxext-dev libxinerama-dev libxrandr-dev libxrender-dev libxi-dev libgl1-mesa-dev libjack-jackd2-dev dpkg-dev
+
+      - name: Install Windows packaging tool
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: choco install nsis --yes --no-progress
+
+      - name: Install macOS build tools
+        if: runner.os == 'macOS'
+        run: brew install ninja
+
+      - name: Configure
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$VERSION" = "$GITHUB_REF_NAME" ]; then VERSION="0.1.0"; fi
+          PLATFORM_ARGS=()
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            PLATFORM_ARGS+=("-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64")
+          fi
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DXSTNSIONS_BUILD_PLUGINS=ON -DXSTNSIONS_PACKAGE_VERSION="$VERSION" "${PLATFORM_ARGS[@]}"
+
+      - name: Build
+        run: cmake --build build --config Release --parallel 2
+
+      - name: Run engine tests
+        run: ctest --test-dir build --build-config Release --output-on-failure
+
+      - name: Package Windows installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cmake --build build --config Release --target package
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Get-ChildItem build -Recurse -Filter *.exe | Where-Object { $_.Name -like 'XSTNSIONS-*.exe' } | Copy-Item -Destination dist
+          if (-not (Get-ChildItem dist -Filter *.exe)) { throw 'CPack did not produce a Windows installer.' }
+          Get-ChildItem dist -Filter *.exe | Select-Object -First 1 | Rename-Item -NewName "XSTNSIONS-$env:GITHUB_REF_NAME-windows-x64-setup.exe"
+
+      - name: Package macOS installer disk image
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$VERSION" = "$GITHUB_REF_NAME" ]; then VERSION="0.1.0"; fi
+          mkdir -p package-root package-stage dist
+          cmake --install build --config Release --prefix "$PWD/package-root" --component Plugins
+          pkgbuild --root package-root --identifier audio.xstnsions.plugins --version "$VERSION" --install-location / "package-stage/XSTNSIONS-${GITHUB_REF_NAME}-macos-universal.pkg"
+          hdiutil create -volname "XSTNSIONS ${GITHUB_REF_NAME}" -srcfolder package-stage -ov -format UDZO "dist/XSTNSIONS-${GITHUB_REF_NAME}-macos-universal.dmg"
+          hdiutil verify "dist/XSTNSIONS-${GITHUB_REF_NAME}-macos-universal.dmg"
+
+      - name: Package Linux Debian installer
+        if: runner.os == 'Linux'
+        run: |
+          cmake --build build --config Release --target package
+          mkdir -p dist
+          find build -maxdepth 2 -name '*.deb' -exec cp {} dist/ \;
+          test -n "$(find dist -name '*.deb' -print -quit)"
+          mv dist/*.deb "dist/XSTNSIONS-${GITHUB_REF_NAME}-linux-x64.deb"
+          dpkg-deb --info dist/*.deb
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: installer-${{ matrix.platform }}
+          path: dist/*
+          if-no-files-found: error
+          compression-level: 0
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: package
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download platform installers
+        uses: actions/download-artifact@v8
+        with:
+          path: dist
+          pattern: installer-*
+          merge-multiple: true
+
+      - name: Create checksums
+        run: |
+          set -eu
+          test -n "$(find dist -maxdepth 1 -type f -print -quit)"
+          cd dist
+          sha256sum * > SHA256SUMS
+
+      - name: Publish installers on the GitHub release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.deb
+            dist/SHA256SUMS
+          generate_release_notes: true
+          fail_on_unmatched_files: true
