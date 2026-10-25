@@ -102,7 +102,9 @@ jobs:
           foreach ($pluginDir in $pluginDirs) {
             $stagedPlugin = Join-Path $pluginRoot $pluginDir.Name
             New-Item -ItemType Directory -Force -Path $stagedPlugin | Out-Null
-            Copy-Item -LiteralPath (Join-Path $pluginDir.FullName '*') -Destination $stagedPlugin -Recurse -Force
+            Get-ChildItem -LiteralPath $pluginDir.FullName -Force | ForEach-Object {
+              Copy-Item -LiteralPath $_.FullName -Destination $stagedPlugin -Recurse -Force
+            }
             $stagedFiles = @(Get-ChildItem -LiteralPath $stagedPlugin -File -Recurse -Force)
             if ($stagedFiles.Count -eq 0) { throw "No files were copied from $($pluginDir.FullName)." }
           }
@@ -125,10 +127,10 @@ jobs:
             SetShellVarContext all
             SetRegView 64
             SetOutPath "$COMMONFILES64\VST3/XSTNSIONS Instrument.vst3"
-            File /r "${SOURCE_DIR}/XSTNSIONS Instrument.vst3"
+            File /r "${SOURCE_DIR}\XSTNSIONS Instrument.vst3\*.*"
             IfErrors abort_install
             SetOutPath "$COMMONFILES64\VST3/XSTNSIONS Effect.vst3"
-            File /r "${SOURCE_DIR}/XSTNSIONS Effect.vst3"
+            File /r "${SOURCE_DIR}\XSTNSIONS Effect.vst3\*.*"
             IfErrors abort_install
             WriteUninstaller "$INSTDIR\Uninstall.exe"
             WriteRegStr HKLM "Software\XSTNSIONS Audio\XSTNSIONS" "InstallLocation" "$INSTDIR"
