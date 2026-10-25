@@ -93,7 +93,7 @@ jobs:
         run: |
           cmake --build build --config Release --target package
           mkdir -p dist
-          find build -maxdepth 2 -name '*.deb' -exec cp {} dist/ \\\;
+          find build -maxdepth 2 -name '*.deb' -exec cp {} dist/ \;
           test -n "$(find dist -name '*.deb' -print -quit)"
           mv dist/*.deb "dist/XSTNSIONS-${GITHUB_REF_NAME}-linux-x64.deb"
           dpkg-deb --info dist/*.deb
