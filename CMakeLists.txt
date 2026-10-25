@@ -81,13 +81,18 @@ if(XSTNSIONS_BUILD_PLUGINS)
     set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "A modular instrument and effect audio plug-in")
     set(CPACK_PACKAGE_CONTACT "XSTNSIONS Audio")
     set(CPACK_PACKAGE_INSTALL_DIRECTORY "XSTNSIONS")
-    set(XSTNSIONS_PACKAGE_VERSION "${PROJECT_VERSION}" CACHE STRING "Version used in installer package names")
+    set(XSTNSIONS_PACKAGE_VERSION "${PROJECT_VERSION}" CACHE STRING "Version used in desktop installer packages")
     set(CPACK_PACKAGE_VERSION "${XSTNSIONS_PACKAGE_VERSION}")
+
+    # MinGW is explicitly unsupported by JUCE 9; use the MSVC toolchain on Windows.
+    if(WIN32 AND MINGW)
+        message(FATAL_ERROR "JUCE does not support MinGW. Configure XSTNSIONS with Visual Studio 2022 and MSVC.")
+    endif()
+
     set(CPACK_INSTALL_CMAKE_PROJECTS "${CMAKE_BINARY_DIR};${PROJECT_NAME};ALL;/")
     set(CPACK_PACKAGE_FILE_NAME "XSTNSIONS-${XSTNSIONS_PACKAGE_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
-
     if(WIN32)
-        # CPack's component install path directs VST3 bundles into the standard 64-bit location.
+        # Component-specific NSIS path targets the standard 64-bit VST3 directory.
         set(XSTNSIONS_VST3_INSTALL_DIR ".")
         set(CPACK_GENERATOR "NSIS")
         set(CPACK_NSIS_COMPONENT_INSTALL ON)
@@ -99,6 +104,7 @@ if(XSTNSIONS_BUILD_PLUGINS)
         set(CPACK_GENERATOR "DragNDrop")
         set(CPACK_PACKAGING_INSTALL_PREFIX "/")
     else()
+        # /usr is the standard prefix for Debian packages, giving /usr/lib/vst3.
         set(XSTNSIONS_VST3_INSTALL_DIR "lib/vst3")
         set(CPACK_GENERATOR "DEB")
         set(CPACK_DEBIAN_PACKAGE_MAINTAINER "XSTNSIONS Audio")
@@ -109,6 +115,7 @@ if(XSTNSIONS_BUILD_PLUGINS)
         set(CPACK_PACKAGING_INSTALL_PREFIX "/usr")
     endif()
 
+    # JUCE exposes the actual bundle paths as target properties after plugin creation.
     install(DIRECTORY
         "$<TARGET_PROPERTY:XSTNSIONS_Instrument_VST3,JUCE_PLUGIN_ARTEFACT_FILE>"
         DESTINATION "${XSTNSIONS_VST3_INSTALL_DIR}"
@@ -126,7 +133,9 @@ if(XSTNSIONS_BUILD_PLUGINS)
             "$<TARGET_PROPERTY:XSTNSIONS_Effect_AU,JUCE_PLUGIN_ARTEFACT_FILE>"
             DESTINATION "Library/Audio/Plug-Ins/Components"
             COMPONENT Plugins)
-    else()
+    elseif(WIN32)
+        cpack_add_component(Plugins DISPLAY_NAME "VST3 plug-ins" REQUIRED)
+    elseif(UNIX)
         cpack_add_component(Plugins DISPLAY_NAME "VST3 plug-ins" REQUIRED)
     endif()
 
